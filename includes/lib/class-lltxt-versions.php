@@ -87,9 +87,10 @@ class Lltxt_Versions {
 	 */
 	public static function drop_schema() {
 		global $wpdb;
-		$table = self::table_name();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery
-		$wpdb->query( "DROP TABLE IF EXISTS {$table}" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$wpdb->query(
+			$wpdb->prepare( 'DROP TABLE IF EXISTS %i', self::table_name() )
+		);
 	}
 
 	/**
@@ -117,17 +118,18 @@ class Lltxt_Versions {
 		$bytes  = strlen( $body );
 
 		// Dedup: same route + sha within DEDUP_WINDOW_DAYS → return existing id.
-		// %i is the WP 6.2+ identifier placeholder — safely backticks the
-		// table name without triggering PluginCheck's NotPrepared sniff.
-		$sql = $wpdb->prepare(
-			'SELECT id FROM %i WHERE route = %s AND sha256 = %s AND created_at >= DATE_SUB(NOW(), INTERVAL %d DAY) ORDER BY id DESC LIMIT 1',
-			$table,
-			$route,
-			$sha,
-			self::DEDUP_WINDOW_DAYS
-		);
+		// %i is the WP 6.2+ identifier placeholder. prepare() is inlined into
+		// the $wpdb call so PluginCheck's NotPrepared sniff can see it.
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$existing = $wpdb->get_var( $sql );
+		$existing = $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT id FROM %i WHERE route = %s AND sha256 = %s AND created_at >= DATE_SUB(NOW(), INTERVAL %d DAY) ORDER BY id DESC LIMIT 1',
+				$table,
+				$route,
+				$sha,
+				self::DEDUP_WINDOW_DAYS
+			)
+		);
 		if ( $existing ) {
 			return (int) $existing;
 		}
@@ -167,31 +169,46 @@ class Lltxt_Versions {
 		$limit  = max( 1, min( 100, (int) $limit ) );
 		$cursor = empty( $cursor ) ? 0 : (int) $cursor;
 
-		// Static SQL variants per filter combination — %i identifier placeholder
-		// for the table name; %s/%d for values.
+		// Static SQL variants per filter combination — every prepare() inlined
+		// directly into get_results() so PluginCheck's NotPrepared sniff sees
+		// it. %i identifier placeholder for the table name; %s/%d for values.
 		if ( ! empty( $route ) && $cursor > 0 ) {
-			$sql = $wpdb->prepare(
-				'SELECT id, route, sha256, bytes, source, pinned, created_at FROM %i WHERE route = %s AND id < %d ORDER BY id DESC LIMIT %d',
-				$table, $route, $cursor, $limit + 1
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT id, route, sha256, bytes, source, pinned, created_at FROM %i WHERE route = %s AND id < %d ORDER BY id DESC LIMIT %d',
+					$table, $route, $cursor, $limit + 1
+				),
+				ARRAY_A
 			);
 		} elseif ( ! empty( $route ) ) {
-			$sql = $wpdb->prepare(
-				'SELECT id, route, sha256, bytes, source, pinned, created_at FROM %i WHERE route = %s ORDER BY id DESC LIMIT %d',
-				$table, $route, $limit + 1
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT id, route, sha256, bytes, source, pinned, created_at FROM %i WHERE route = %s ORDER BY id DESC LIMIT %d',
+					$table, $route, $limit + 1
+				),
+				ARRAY_A
 			);
 		} elseif ( $cursor > 0 ) {
-			$sql = $wpdb->prepare(
-				'SELECT id, route, sha256, bytes, source, pinned, created_at FROM %i WHERE id < %d ORDER BY id DESC LIMIT %d',
-				$table, $cursor, $limit + 1
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT id, route, sha256, bytes, source, pinned, created_at FROM %i WHERE id < %d ORDER BY id DESC LIMIT %d',
+					$table, $cursor, $limit + 1
+				),
+				ARRAY_A
 			);
 		} else {
-			$sql = $wpdb->prepare(
-				'SELECT id, route, sha256, bytes, source, pinned, created_at FROM %i ORDER BY id DESC LIMIT %d',
-				$table, $limit + 1
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT id, route, sha256, bytes, source, pinned, created_at FROM %i ORDER BY id DESC LIMIT %d',
+					$table, $limit + 1
+				),
+				ARRAY_A
 			);
 		}
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$rows = $wpdb->get_results( $sql, ARRAY_A );
 		if ( ! is_array( $rows ) ) {
 			$rows = array();
 		}
@@ -215,10 +232,11 @@ class Lltxt_Versions {
 		if ( $id <= 0 ) {
 			return null;
 		}
-		$table = self::table_name();
-		$sql   = $wpdb->prepare( 'SELECT * FROM %i WHERE id = %d', $table, $id );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$row = $wpdb->get_row( $sql, ARRAY_A );
+		$row = $wpdb->get_row(
+			$wpdb->prepare( 'SELECT * FROM %i WHERE id = %d', self::table_name(), $id ),
+			ARRAY_A
+		);
 		return is_array( $row ) ? $row : null;
 	}
 
@@ -267,10 +285,10 @@ class Lltxt_Versions {
 	 */
 	public static function delete_all() {
 		global $wpdb;
-		$table = self::table_name();
-		$sql   = $wpdb->prepare( 'DELETE FROM %i', $table );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$count = (int) $wpdb->query( $sql );
+		$count = (int) $wpdb->query(
+			$wpdb->prepare( 'DELETE FROM %i', self::table_name() )
+		);
 		return $count;
 	}
 
@@ -281,14 +299,14 @@ class Lltxt_Versions {
 	 */
 	public static function sweep_expired() {
 		global $wpdb;
-		$table = self::table_name();
-		$sql   = $wpdb->prepare(
-			'DELETE FROM %i WHERE created_at < DATE_SUB(NOW(), INTERVAL %d DAY) AND pinned = 0',
-			$table,
-			self::TTL_DAYS
-		);
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$count = (int) $wpdb->query( $sql );
+		$count = (int) $wpdb->query(
+			$wpdb->prepare(
+				'DELETE FROM %i WHERE created_at < DATE_SUB(NOW(), INTERVAL %d DAY) AND pinned = 0',
+				self::table_name(),
+				self::TTL_DAYS
+			)
+		);
 		return $count;
 	}
 }
