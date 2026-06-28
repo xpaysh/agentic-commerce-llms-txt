@@ -126,7 +126,9 @@ class Lltxt_Install_Ping {
 	/**
 	 * POST /v1/llms-txt/installs.
 	 *
-	 * @param string $context 'activate' | 'weekly' | 'manual'.
+	 * @param string $context 'activate' | 'weekly' | 'manual' | 'deactivate'.
+	 *                       (Uninstall has its own fire-and-forget call from
+	 *                       uninstall.php — the plugin code isn't loaded then.)
 	 * @return array|WP_Error|null
 	 */
 	public static function ping( $context = 'activate' ) {

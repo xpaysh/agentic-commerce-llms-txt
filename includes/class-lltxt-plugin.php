@@ -265,9 +265,16 @@ final class Lltxt_Plugin {
 	}
 
 	/**
-	 * Deactivation: clear cron and flush rewrite rules.
+	 * Deactivation: clear cron, flush rewrite rules, fire a deactivate ping
+	 * so the install digest can show this row as dormant (vs uninstalled,
+	 * which is irreversible). Blocking so the request actually goes out
+	 * before WP unloads the plugin.
 	 */
 	public static function deactivate() {
+		require_once LLTXT_DIR . 'includes/lib/class-lltxt-install-ping.php';
+		// ping() is blocking via wp_remote_post default — completes before
+		// WP unloads the plugin and clears the cron hooks below.
+		Lltxt_Install_Ping::ping( 'deactivate' );
 		wp_clear_scheduled_hook( self::CRON_DAILY );
 		wp_clear_scheduled_hook( self::CRON_NOW );
 		wp_clear_scheduled_hook( self::CRON_WEEKLY_PING );
