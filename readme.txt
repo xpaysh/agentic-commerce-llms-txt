@@ -8,27 +8,29 @@ Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Will ChatGPT recommend your WooCommerce store? This plugin makes it happen. One install, one file, free forever.
+Get recommended by ChatGPT, Claude and Perplexity. Commerce-aware /llms.txt for your WooCommerce store — auto-refreshed, free forever.
 
 == Description ==
 
 **A shopper asks ChatGPT: *"Where can I buy a waterproof bike light under $50?"***
 
-If your store sells one, you want to be the answer. Right now, you probably aren't — because ChatGPT, Claude, Perplexity and Google's AI Mode all look for a file called `/llms.txt` at your domain root before they'll recommend your products. **Most WooCommerce stores don't ship one.** The handful of generic plugins that do are blog-post walkers — they have no idea what a product, a price, or a variation is.
+If your store sells one, you want to be the answer. To stand a chance, ChatGPT, Claude, Perplexity and Google's AI Mode need a file called `/llms.txt` at your domain root — a clean, machine-readable summary of what you sell. Most WooCommerce stores don't have one yet, and the generic plugins that do are built around blog posts and pages. They have no idea what a product, a price, or a variation is.
 
 This plugin fixes that. In 30 seconds.
 
+**35 plugins on WordPress.org generate `/llms.txt`. One reads your catalog.**
+
 = What you get =
 
-* **A `/llms.txt` file** built from your live WooCommerce catalog — top-selling products, real prices, real images, real links. The format AI shopping assistants are trained to read.
+* **A `/llms.txt` file** built from your live WooCommerce catalog — top-selling products, real prices, real images, real links. The format AI shopping agents are converging on.
 * **A `/llms-full.txt` file** with your full catalog, one section per product, for AI agents that want everything in one fetch.
-* **Daily auto-refresh** — when you add products, change prices, or update stock, your `/llms.txt` updates itself. No cron commands. No buttons to press.
-* **Version history with one-click rollback** — every refresh is kept so you can compare and restore. Pin a version when you've got it just right.
+* **Daily auto-refresh.** When you add products, change prices, or update stock, your files update themselves. No schedules to wire up. No buttons to press.
+* **Version history with one-click rollback.** Every refresh is kept so you can compare and restore. Pin a version when you've got it just right.
 * **Free forever.** No tier-gates. No upsells. No nags.
 
 = Why this is built for WooCommerce, not WordPress =
 
-Generic llms.txt plugins walk your blog posts and pages. AI shopping agents need **products** — with a price and an image per item — to actually recommend you. Without that, your store turns into prose, and the agent recommends a competitor whose data is cleaner.
+Generic llms.txt plugins summarise your blog posts and pages. AI shopping agents need **products** — with a price and an image per item — to actually recommend you. Without that, your store turns into prose, and the agent recommends a competitor whose data is cleaner.
 
 This plugin reads your live WooCommerce catalog and emits exactly what AI shoppers expect:
 
@@ -41,7 +43,9 @@ This plugin reads your live WooCommerce catalog and emits exactly what AI shoppe
 
 = Built by the team behind Agentic Commerce for WooCommerce =
 
-The team behind this plugin runs AI-shopping infrastructure across thousands of stores. We see, every day, which catalogs ChatGPT picks up and which it skips. We built this so any WooCommerce store gets the same treatment — for free.
+We build AI-shopping infrastructure for WooCommerce stores. We see, every day, which catalogs AI shoppers pick up and which they skip. We built this so any WooCommerce store — yours included — gets the same treatment for free.
+
+**You can't win the race if you don't show up.**
 
 == External services ==
 
@@ -78,7 +82,7 @@ That's it. Settings live at **Settings → LLMs.txt** if you want to tune which 
 
 = I already have a /llms.txt — what happens to it? =
 
-Your file is preserved. On activation the plugin **copies it to `wp-content/uploads/lltxt-backups/<file>-<date>.bak`** (with a timestamped name, so subsequent activations never overwrite the backup), then takes over `/llms.txt` so your products are immediately AI-ready. **Restore your original any time** with one click from the Files tab → *Restore my version*. The backup never gets deleted, even on plugin uninstall — your file is yours.
+Your file is preserved. On activation we save your original to a timestamped backup inside your WordPress uploads folder, then take over `/llms.txt` so your products are immediately AI-ready. **Restore your original any time** with one click from the Files tab → *Restore my version*. The backup is never deleted, even on plugin uninstall — your file is yours.
 
 = Does it slow my store down? =
 
@@ -86,7 +90,7 @@ No. Files are generated by a background job (daily, or whenever you click Regene
 
 = Does it work with WP Engine / Flywheel / hardened hosts? =
 
-Yes. The plugin tries three write strategies (direct write, `WP_Filesystem`, fopen stream) so it works on WP Engine, Flywheel, WP VIP and most managed hosts. If a file can't be written, you'll see the error in the Diagnostics tab.
+Yes. The plugin tries multiple write strategies so it works on WP Engine, Flywheel, WP VIP and most managed hosts where direct file access is restricted. If a file can't be written, you'll see the error and a fix in the Diagnostics tab.
 
 = Does it work with my SEO plugin? =
 
@@ -106,18 +110,19 @@ Yes. No paid tier, no premium upsell, no "pro version" lurking in the admin. The
 
 == Screenshots ==
 
-1. Your `/llms.txt` rendered — a card-ready product table that AI shoppers can read at a glance.
-2. The Files tab: previews and regenerate-now button per file.
-3. Version Control: prior versions with one-click restore and pin.
-4. The per-product *Exclude from llms.txt* checkbox.
-5. Privacy tab: version-history sync toggle and delete-my-data button.
+1. Your live `/llms.txt` — a card-ready product summary AI shoppers can read at a glance.
+2. The Files tab — preview each file and regenerate on demand.
+3. Version Control — every prior version, one-click restore and pin.
+4. The per-product *Exclude from llms.txt* checkbox on every product edit screen.
+5. Privacy tab — version-history sync toggle and delete-my-data button.
 
 == Changelog ==
 
 = 1.0.0 =
-* Initial release. Generates `/llms.txt` and `/llms-full.txt` from your WooCommerce catalog. Daily auto-refresh. Per-product exclusion. WooCommerce visibility honoured. SEO-plugin description fallback. Version history with restore and pin. WP Engine, Flywheel and WP VIP compatible. Free forever.
+* Commerce-aware `/llms.txt` and `/llms-full.txt` generation for WooCommerce — daily auto-refresh, per-product exclusion, SEO-plugin description fallback, managed-host compatibility.
+* Version Control with one-click restore and pin; non-destructive take-over of any existing `/llms.txt`.
 
 == Upgrade Notice ==
 
 = 1.0.0 =
-First release. Install and your products are in front of ChatGPT, Claude and Perplexity in 30 seconds.
+Install and your products are in front of ChatGPT, Claude and Perplexity in 30 seconds.
