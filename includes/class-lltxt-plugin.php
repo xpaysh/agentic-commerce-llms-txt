@@ -32,6 +32,11 @@ final class Lltxt_Plugin {
 	const CRON_NOW = 'lltxt_refresh_now';
 
 	/**
+	 * Weekly install ping hook.
+	 */
+	const CRON_WEEKLY_PING = 'lltxt_weekly_ping';
+
+	/**
 	 * Get (or create) the singleton.
 	 *
 	 * @return Lltxt_Plugin
@@ -52,11 +57,24 @@ final class Lltxt_Plugin {
 		Lltxt_Router::init();
 		Lltxt_Refresh::init();
 
+		add_action( self::CRON_WEEKLY_PING, array( __CLASS__, 'run_weekly_ping' ) );
+
 		if ( is_admin() ) {
 			Lltxt_Admin_Page::init();
 			Lltxt_Product_Metabox::init();
 			add_action( 'admin_notices', array( __CLASS__, 'render_first_run_notice' ) );
 			add_action( 'admin_init', array( __CLASS__, 'maybe_dismiss_notice' ) );
+		}
+	}
+
+	/**
+	 * Weekly install-ping cron handler.
+	 *
+	 * @return void
+	 */
+	public static function run_weekly_ping() {
+		if ( class_exists( 'Lltxt_Install_Ping' ) ) {
+			Lltxt_Install_Ping::ping( 'weekly' );
 		}
 	}
 
@@ -77,25 +95,14 @@ final class Lltxt_Plugin {
 			add_query_arg( 'lltxt_dismiss_first_run', 1 ),
 			'lltxt_dismiss_first_run'
 		);
-		$found        = get_transient( 'lltxt_first_activation_found_existing' );
 		echo '<div class="notice notice-info is-dismissible"><p>';
 		echo wp_kses_post(
 			sprintf(
 				/* translators: %s: settings URL. */
-				__( '<strong>LLMs.txt for WooCommerce</strong> keeps a version history of your /llms.txt and /llms-full.txt so you can roll back if needed. Turn it off in <a href="%s">Settings → LLMs.txt → Privacy</a>.', 'llms-txt-for-woocommerce' ),
+				__( '<strong>LLMs.txt for WooCommerce</strong> is active. Manage the weekly install ping at <a href="%s">Settings &rarr; LLMs.txt &rarr; Privacy</a>.', 'llms-txt-for-woocommerce' ),
 				esc_url( $settings_url )
 			)
 		);
-		if ( is_array( $found ) && ! empty( $found ) ) {
-			echo '<br />';
-			echo esc_html(
-				sprintf(
-					/* translators: %d: number of files. */
-					_n( 'Found %d existing file in your webroot — backed up to /wp-content/uploads/lltxt-backups/, the plugin is now managing it. Restore your version any time from the Files tab.', 'Found %d existing files in your webroot — backed up to /wp-content/uploads/lltxt-backups/, the plugin is now managing them. Restore your versions any time from the Files tab.', count( $found ), 'llms-txt-for-woocommerce' ),
-					count( $found )
-				)
-			);
-		}
 		echo ' <a href="' . esc_url( $dismiss_url ) . '" style="margin-left:8px;">' . esc_html__( 'Dismiss', 'llms-txt-for-woocommerce' ) . '</a>';
 		echo '</p></div>';
 	}
@@ -127,8 +134,9 @@ final class Lltxt_Plugin {
 		require_once LLTXT_DIR . 'includes/lib/class-lltxt-cache.php';
 		require_once LLTXT_DIR . 'includes/lib/class-lltxt-catalog-reader.php';
 		require_once LLTXT_DIR . 'includes/lib/class-lltxt-router.php';
+		require_once LLTXT_DIR . 'includes/lib/class-lltxt-versions.php';
 		require_once LLTXT_DIR . 'includes/lib/class-lltxt-refresh.php';
-		require_once LLTXT_DIR . 'includes/lib/class-lltxt-snapshot.php';
+		require_once LLTXT_DIR . 'includes/lib/class-lltxt-install-ping.php';
 		require_once LLTXT_DIR . 'includes/lib/class-lltxt-seo-bridge.php';
 
 		// Emitters — just llms.txt + llms-full.txt. WC-specialized content.
@@ -177,22 +185,30 @@ final class Lltxt_Plugin {
 	}
 
 	/**
-	 * Activation: register rewrite rules, schedule cron, flush.
+	 * Activation: install schema, register rewrite rules, schedule cron,
+	 * fire the initial install ping.
 	 */
 	public static function activate() {
 		// Make sure class files are loaded during activation.
 		require_once LLTXT_DIR . 'includes/lib/class-lltxt-cache.php';
 		require_once LLTXT_DIR . 'includes/lib/class-lltxt-catalog-reader.php';
 		require_once LLTXT_DIR . 'includes/lib/class-lltxt-router.php';
+		require_once LLTXT_DIR . 'includes/lib/class-lltxt-versions.php';
 		require_once LLTXT_DIR . 'includes/lib/class-lltxt-refresh.php';
-		require_once LLTXT_DIR . 'includes/lib/class-lltxt-snapshot.php';
+		require_once LLTXT_DIR . 'includes/lib/class-lltxt-install-ping.php';
 		require_once LLTXT_DIR . 'includes/emitters/interface-lltxt-emitter.php';
+
+		// Custom table for local version history.
+		Lltxt_Versions::install_schema();
 
 		Lltxt_Router::register_rules();
 		flush_rewrite_rules();
 
 		if ( ! wp_next_scheduled( self::CRON_DAILY ) ) {
 			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', self::CRON_DAILY );
+		}
+		if ( ! wp_next_scheduled( self::CRON_WEEKLY_PING ) ) {
+			wp_schedule_event( time() + DAY_IN_SECONDS, 'weekly', self::CRON_WEEKLY_PING );
 		}
 
 		// Seed defaults without clobbering existing operator choices.
@@ -208,22 +224,20 @@ final class Lltxt_Plugin {
 			);
 		}
 
-		// Phone-home: default ON. Merchant can flip in Settings → LLMs.txt → Privacy.
-		if ( false === get_option( Lltxt_Snapshot::OPT_PHONE_HOME, false ) ) {
-			add_option( Lltxt_Snapshot::OPT_PHONE_HOME, 1, '', false );
+		// Install-ping master toggle: default ON.
+		if ( false === get_option( Lltxt_Install_Ping::OPT_ENABLED, false ) ) {
+			add_option( Lltxt_Install_Ping::OPT_ENABLED, 1, '', false );
 		}
 
-		// Bootstrap api_key once. Raw key never leaves the site — only sha256(key)
-		// is sent in the X-Xpay-Api-Key header.
-		if ( false === get_option( Lltxt_Snapshot::OPT_API_KEY, false ) ) {
-			add_option( Lltxt_Snapshot::OPT_API_KEY, wp_generate_password( 64, false, false ), '', false );
+		// Bootstrap api_key once.
+		if ( false === get_option( Lltxt_Install_Ping::OPT_API_KEY, false ) ) {
+			add_option( Lltxt_Install_Ping::OPT_API_KEY, wp_generate_password( 64, false, false ), '', false );
 		}
 
 		// First-activation pass: back up any pre-existing emitted files in the
-		// webroot, then snapshot the merchant's original to the version-history
-		// backend with source=merchant-pre-existing so it appears in the
-		// Version Control tab alongside future plugin-generated versions.
-		require_once LLTXT_DIR . 'includes/lib/class-lltxt-snapshot.php';
+		// webroot, then store the merchant's original to the local version table
+		// with source=merchant-pre-existing so it appears in Version Control
+		// alongside future plugin-generated versions.
 		$found = array();
 		foreach ( array_values( Lltxt_Router::routes() ) as $rel ) {
 			$full = Lltxt_Cache::get_path( $rel );
@@ -236,7 +250,7 @@ final class Lltxt_Plugin {
 			if ( Lltxt_Cache::backup_existing( $rel ) ) {
 				$found[] = $rel;
 				if ( is_string( $existing_body ) && '' !== $existing_body ) {
-					Lltxt_Snapshot::post_snapshot( $rel, $existing_body, 'merchant-pre-existing' );
+					Lltxt_Versions::insert( $rel, $existing_body, 'merchant-pre-existing' );
 				}
 			}
 		}
@@ -244,7 +258,9 @@ final class Lltxt_Plugin {
 			set_transient( 'lltxt_first_activation_found_existing', $found, DAY_IN_SECONDS );
 		}
 
-		// First-run admin notice for the phone-home disclosure.
+		// Fire the initial install ping.
+		Lltxt_Install_Ping::ping( 'activate' );
+
 		set_transient( 'lltxt_show_first_run_notice', 1, MONTH_IN_SECONDS );
 	}
 
@@ -254,7 +270,7 @@ final class Lltxt_Plugin {
 	public static function deactivate() {
 		wp_clear_scheduled_hook( self::CRON_DAILY );
 		wp_clear_scheduled_hook( self::CRON_NOW );
+		wp_clear_scheduled_hook( self::CRON_WEEKLY_PING );
 		flush_rewrite_rules();
 	}
 }
-

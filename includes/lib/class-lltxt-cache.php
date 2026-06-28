@@ -248,6 +248,9 @@ class Lltxt_Cache {
 		}
 		self::record_timestamp( $relative_path, time(), strlen( $body ) );
 		self::set_mode( $relative_path, self::MODE_MERCHANT );
+		if ( class_exists( 'Lltxt_Versions' ) ) {
+			Lltxt_Versions::insert( $relative_path, $body, 'restored' );
+		}
 		return true;
 	}
 

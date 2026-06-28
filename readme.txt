@@ -25,7 +25,7 @@ This plugin fixes that. In 30 seconds.
 * **A `/llms.txt` file** built from your live WooCommerce catalog — top-selling products, real prices, real images, real links. The format AI shopping agents are converging on.
 * **A `/llms-full.txt` file** with your full catalog, one section per product, for AI agents that want everything in one fetch.
 * **Daily auto-refresh.** When you add products, change prices, or update stock, your files update themselves. No schedules to wire up. No buttons to press.
-* **Version history with one-click rollback.** Every refresh is kept so you can compare and restore. Pin a version when you've got it just right.
+* **Version history with one-click rollback** (stored locally — nothing leaves your site). Every refresh is kept so you can compare and restore. Pin a version when you've got it just right.
 * **Free forever.** No tier-gates. No upsells. No nags.
 
 = Why this is built for WooCommerce, not WordPress =
@@ -49,22 +49,10 @@ We build AI-shopping infrastructure for WooCommerce stores. We see, every day, w
 
 == External services ==
 
-This plugin keeps a version history of your `/llms.txt` and `/llms-full.txt` at xpay.sh so you can compare versions and roll back to any prior one with a single click. This is **on by default** and disclosed in a dismissible admin notice on activation. Turn it off any time in **Settings → LLMs.txt → Privacy**.
+The plugin sends a small install ping to xpay.sh on activation and once a week so we can track how many sites are using it: your site URL, your slug, your WordPress / WooCommerce / plugin versions, and your active product count. Toggle off in **Settings → LLMs.txt → Privacy**.
 
-**Service:** xpay.sh LLMs.txt version-history API
-**Base URL:** `https://llmstxt-api.xpay.sh` (filterable via the `lltxt_backend_base_url` filter or option)
+**Endpoint:** `https://llmstxt-api.xpay.sh/v1/llms-txt/installs`
 **Privacy policy:** https://xpay.sh/privacy
-**Terms of service:** https://xpay.sh/terms
-
-**What's sent, when, and why:**
-
-* `POST /v1/llms-txt/snapshot` — After every refresh (daily auto + on-demand). Sends the rendered `/llms.txt` and `/llms-full.txt` bodies (the same bodies served publicly from your domain), plus your site slug, WordPress/WooCommerce/plugin version strings, and a sha256 of a random local key as `X-Xpay-Api-Key`. Keeps the version history.
-* `GET /v1/llms-txt/versions` and `GET /v1/llms-txt/version/{id}` — When you open the Version Control tab. Lists or fetches prior versions.
-* `POST /v1/llms-txt/recommend` — When you click *Get recommendation*. Returns a merged best-version body.
-* `POST /v1/llms-txt/pin` — When you pin or unpin a version.
-* `DELETE /v1/llms-txt/merchant` — When you click *Delete my data*, or on plugin uninstall (if sync was on).
-
-**What is NOT sent:** no order data, no customer data, no admin email, no analytics, no raw API key. The file bodies sent to us are the same bodies you serve publicly at `yourstore.com/llms.txt`.
 
 == Installation ==
 
@@ -106,7 +94,11 @@ Every other llms.txt plugin on the wp.org repository walks your **blog posts and
 
 = Is it really free forever? =
 
-Yes. No paid tier, no premium upsell, no "pro version" lurking in the admin. The version-history sync to xpay.sh is also free. You can turn it off in **Settings → LLMs.txt → Privacy** if you'd rather not use it.
+Yes. No paid tier, no premium upsell, no "pro version" lurking in the admin.
+
+= Does this send my data anywhere? =
+
+Just one small ping on activation and weekly: your URL, your WordPress / WooCommerce / plugin versions, and your product count. Toggle off in **Settings → LLMs.txt → Privacy**. Your `/llms.txt` versions are stored only in your own WordPress database.
 
 == Screenshots ==
 

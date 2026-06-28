@@ -144,17 +144,20 @@ class Lltxt_Refresh {
 			}
 		}
 
-		// Second pass: fire-and-forget snapshot POSTs. Each is non-blocking
-		// so a slow backend never blocks the refresh.
-		if ( class_exists( 'Lltxt_Snapshot' ) && Lltxt_Snapshot::is_enabled() ) {
+		// Second pass: persist new versions to the local store.
+		if ( class_exists( 'Lltxt_Versions' ) ) {
 			foreach ( $snaps as $s ) {
-				Lltxt_Snapshot::post_snapshot( $s[0], $s[1], $s[2], false );
+				Lltxt_Versions::insert( $s[0], $s[1], $s[2] );
 			}
 		}
 
-		// Only treat a whole-run (no $only filter) as a "last refresh" bump.
+		// Only treat a whole-run (no $only filter) as a "last refresh" bump,
+		// and only then do the daily TTL sweep.
 		if ( null === $only ) {
 			update_option( self::OPT_LAST, time(), false );
+			if ( class_exists( 'Lltxt_Versions' ) ) {
+				Lltxt_Versions::sweep_expired();
+			}
 		}
 
 		self::log(
