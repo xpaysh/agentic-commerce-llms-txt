@@ -62,8 +62,6 @@ final class Lltxt_Plugin {
 		if ( is_admin() ) {
 			Lltxt_Admin_Page::init();
 			Lltxt_Product_Metabox::init();
-			add_action( 'admin_notices', array( __CLASS__, 'render_first_run_notice' ) );
-			add_action( 'admin_init', array( __CLASS__, 'maybe_dismiss_notice' ) );
 		}
 	}
 
@@ -78,55 +76,7 @@ final class Lltxt_Plugin {
 		}
 	}
 
-	/**
-	 * Dismissible disclosure on first activate.
-	 *
-	 * @return void
-	 */
-	public static function render_first_run_notice() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
-		if ( ! get_transient( 'lltxt_show_first_run_notice' ) ) {
-			return;
-		}
-		$settings_url = admin_url( 'options-general.php?page=' . Lltxt_Admin_Page::SLUG . '&tab=privacy' );
-		$dismiss_url  = wp_nonce_url(
-			add_query_arg( 'lltxt_dismiss_first_run', 1 ),
-			'lltxt_dismiss_first_run'
-		);
-		echo '<div class="notice notice-info is-dismissible"><p>';
-		echo wp_kses_post(
-			sprintf(
-				/* translators: %s: settings URL. */
-				__( '<strong>LLMs.txt for WooCommerce</strong> is active. Manage the weekly install ping at <a href="%s">Settings &rarr; LLMs.txt &rarr; Privacy</a>.', 'llms-txt-for-woocommerce' ),
-				esc_url( $settings_url )
-			)
-		);
-		echo ' <a href="' . esc_url( $dismiss_url ) . '" style="margin-left:8px;">' . esc_html__( 'Dismiss', 'llms-txt-for-woocommerce' ) . '</a>';
-		echo '</p></div>';
-	}
-
-	/**
-	 * Dismiss the first-run notice.
-	 *
-	 * @return void
-	 */
-	public static function maybe_dismiss_notice() {
-		if ( ! isset( $_GET['lltxt_dismiss_first_run'] ) ) {
-			return;
-		}
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
-		check_admin_referer( 'lltxt_dismiss_first_run' );
-		delete_transient( 'lltxt_show_first_run_notice' );
-		delete_transient( 'lltxt_first_activation_found_existing' );
-		wp_safe_redirect( remove_query_arg( array( 'lltxt_dismiss_first_run', '_wpnonce' ) ) );
-		exit;
-	}
-
-	/**
+/**
 	 * Require all class files.
 	 */
 	private function includes() {
@@ -257,14 +207,8 @@ final class Lltxt_Plugin {
 			add_option( Lltxt_Install_Ping::OPT_API_KEY, wp_generate_password( 64, false, false ), '', false );
 		}
 
-		if ( ! empty( $captured ) ) {
-			set_transient( 'lltxt_first_activation_found_existing', array_keys( $captured ), DAY_IN_SECONDS );
-		}
-
 		// Fire the initial install ping.
 		Lltxt_Install_Ping::ping( 'activate' );
-
-		set_transient( 'lltxt_show_first_run_notice', 1, MONTH_IN_SECONDS );
 	}
 
 	/**
