@@ -201,6 +201,29 @@ final class Lltxt_Plugin {
 		// Custom table for local version history.
 		Lltxt_Versions::install_schema();
 
+		// FIRST: capture whatever is currently being served at each of our
+		// routes — BEFORE we register our own rewrite rules. Covers three
+		// cases the on-disk file_exists() check misses:
+		//   (a) static /llms.txt at a non-standard webroot path (Bedrock etc.)
+		//   (b) another plugin serving /llms.txt dynamically (no static file)
+		//   (c) a CDN edge-cached body even though the origin file is gone
+		// The HTTP self-fetch is the source of truth for "what does a
+		// crawler see when they hit /llms.txt right now". We record any
+		// non-empty body as merchant-pre-existing so the merchant never
+		// loses their prior content.
+		$captured = array();
+		foreach ( array_values( Lltxt_Router::routes() ) as $rel ) {
+			$body = self::capture_existing_route_body( $rel );
+			if ( is_string( $body ) && '' !== $body ) {
+				Lltxt_Versions::insert( $rel, $body, 'merchant-pre-existing' );
+				$captured[ $rel ] = strlen( $body );
+				// Also persist to the on-disk backup if we can resolve a path
+				// for it (best-effort — backup_existing handles the
+				// file_exists check internally and is a no-op otherwise).
+				Lltxt_Cache::backup_existing( $rel );
+			}
+		}
+
 		Lltxt_Router::register_rules();
 		flush_rewrite_rules();
 
@@ -234,34 +257,66 @@ final class Lltxt_Plugin {
 			add_option( Lltxt_Install_Ping::OPT_API_KEY, wp_generate_password( 64, false, false ), '', false );
 		}
 
-		// First-activation pass: back up any pre-existing emitted files in the
-		// webroot, then store the merchant's original to the local version table
-		// with source=merchant-pre-existing so it appears in Version Control
-		// alongside future plugin-generated versions.
-		$found = array();
-		foreach ( array_values( Lltxt_Router::routes() ) as $rel ) {
-			$full = Lltxt_Cache::get_path( $rel );
-			if ( ! file_exists( $full ) ) {
-				continue;
-			}
-			// Capture body BEFORE backup_existing flips the route to plugin-managed.
-			// phpcs:ignore WordPress.WP.AlternativeFunctions
-			$existing_body = @file_get_contents( $full );
-			if ( Lltxt_Cache::backup_existing( $rel ) ) {
-				$found[] = $rel;
-				if ( is_string( $existing_body ) && '' !== $existing_body ) {
-					Lltxt_Versions::insert( $rel, $existing_body, 'merchant-pre-existing' );
-				}
-			}
-		}
-		if ( ! empty( $found ) ) {
-			set_transient( 'lltxt_first_activation_found_existing', $found, DAY_IN_SECONDS );
+		if ( ! empty( $captured ) ) {
+			set_transient( 'lltxt_first_activation_found_existing', array_keys( $captured ), DAY_IN_SECONDS );
 		}
 
 		// Fire the initial install ping.
 		Lltxt_Install_Ping::ping( 'activate' );
 
 		set_transient( 'lltxt_show_first_run_notice', 1, MONTH_IN_SECONDS );
+	}
+
+	/**
+	 * Capture whatever is currently being served at a route, BEFORE we
+	 * register our own rewrite rules. Tries the static file first; falls
+	 * back to a loopback HTTP fetch so we catch dynamically-served files
+	 * from other llms.txt plugins. Returns null on any failure.
+	 *
+	 * @param string $rel Route relative path (e.g. 'llms.txt').
+	 * @return string|null File body, or null if nothing meaningful was served.
+	 */
+	private static function capture_existing_route_body( $rel ) {
+		// 1. Static file at the resolved webroot path.
+		$full = Lltxt_Cache::get_path( $rel );
+		if ( file_exists( $full ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions
+			$body = @file_get_contents( $full );
+			if ( is_string( $body ) && '' !== $body ) {
+				return $body;
+			}
+		}
+		// 2. Loopback HTTP fetch — catches dynamic routes from other plugins,
+		// non-standard webroot layouts, and CDN-edge bodies. We're still
+		// inside our activate() callback so our own rewrite rules are NOT
+		// yet flushed to the cache → the request hits the prior handler.
+		$url  = Lltxt_Cache::get_url( $rel );
+		$resp = wp_remote_get(
+			$url,
+			array(
+				'timeout'     => 5,
+				'redirection' => 0,
+				'sslverify'   => false, // local instances often have self-signed certs
+				'headers'     => array(
+					'User-Agent' => 'LLMs.txt-for-WooCommerce/preflight',
+					'Accept'     => 'text/plain, */*',
+				),
+			)
+		);
+		if ( is_wp_error( $resp ) ) {
+			return null;
+		}
+		$code = (int) wp_remote_retrieve_response_code( $resp );
+		if ( 200 !== $code ) {
+			return null;
+		}
+		$body = (string) wp_remote_retrieve_body( $resp );
+		// Ignore obvious 404/empty pages that came back as 200 (some hosts
+		// return a styled "Not Found" with a 200 + tiny HTML body).
+		if ( '' === $body || strlen( $body ) < 16 ) {
+			return null;
+		}
+		return $body;
 	}
 
 	/**
