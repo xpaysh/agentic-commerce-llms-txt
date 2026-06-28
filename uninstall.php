@@ -14,8 +14,12 @@
 
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
-// 1. Best-effort DELETE /v1/llms-txt/installs — must read api_key + toggle +
-//    slug BEFORE we delete the options below. Synchronous, 5s timeout, errors ignored.
+// 1. Best-effort uninstall ping — POST with context=uninstall so the row is
+//    soft-marked (uninstalled_at set) and surfaces in the install-digest
+//    churn cohort. A daily sweep at the backend hard-deletes any row whose
+//    uninstalled_at is older than 180 days, so retention is bounded.
+//    Synchronous, 5s timeout, errors ignored. Must read api_key + toggle +
+//    slug BEFORE we delete the options below.
 $lltxt_phone_home = (int) get_option( 'lltxt_phone_home', 1 );
 $lltxt_api_key    = (string) get_option( 'lltxt_api_key', '' );
 $lltxt_base_url   = (string) get_option(
@@ -28,15 +32,23 @@ $lltxt_host     = wp_parse_url( home_url(), PHP_URL_HOST );
 $lltxt_slug     = is_string( $lltxt_host ) ? strtolower( str_replace( '.', '-', $lltxt_host ) ) : '';
 
 if ( 1 === $lltxt_phone_home && '' !== $lltxt_api_key && '' !== $lltxt_slug ) {
-	$lltxt_delete_url = untrailingslashit( $lltxt_base_url ) . '/v1/llms-txt/installs?slug=' . rawurlencode( $lltxt_slug );
+	$lltxt_uninstall_url = untrailingslashit( $lltxt_base_url ) . '/v1/llms-txt/installs';
 	wp_remote_request(
-		$lltxt_delete_url,
+		$lltxt_uninstall_url,
 		array(
-			'method'  => 'DELETE',
+			'method'  => 'POST',
 			'timeout' => 5,
 			'headers' => array(
-				'X-Xpay-Api-Key' => hash( 'sha256', $lltxt_api_key ),
+				'Content-Type'   => 'application/json',
 				'Accept'         => 'application/json',
+				'X-Xpay-Api-Key' => hash( 'sha256', $lltxt_api_key ),
+			),
+			'body'    => wp_json_encode(
+				array(
+					'slug'     => $lltxt_slug,
+					'home_url' => home_url( '/' ),
+					'context'  => 'uninstall',
+				)
 			),
 		)
 	);
